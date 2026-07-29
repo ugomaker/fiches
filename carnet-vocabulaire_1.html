@@ -1,0 +1,858 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Carnet de vocabulaire</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #1b2130;
+    --bg-elevated: #242b3d;
+    --card-front: #f6efdd;
+    --card-front-text: #26221f;
+    --card-back: #2f6f63;
+    --card-back-text: #f5f2e8;
+    --accent: #e0a94c;
+    --accent-soft: rgba(224, 169, 76, 0.16);
+    --text-light: #ede9e0;
+    --text-muted: #9aa2b4;
+    --danger: #c1666b;
+    --danger-soft: rgba(193, 102, 107, 0.15);
+    --radius: 14px;
+    --shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--bg);
+    color: var(--text-light);
+    font-family: 'Work Sans', sans-serif;
+    display: flex;
+    justify-content: center;
+    padding: 32px 16px 60px;
+  }
+
+  #app {
+    width: 100%;
+    max-width: 460px;
+  }
+
+  .topbar {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 18px;
+  }
+
+  .topbar h1 {
+    font-family: 'Space Mono', monospace;
+    font-size: 1.15rem;
+    font-weight: 700;
+    margin: 0;
+    letter-spacing: 0.01em;
+  }
+
+  .view-tabs {
+    display: flex;
+    gap: 4px;
+    background: var(--bg-elevated);
+    border-radius: 999px;
+    padding: 3px;
+  }
+
+  .view-tabs button {
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    font-family: 'Work Sans', sans-serif;
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 6px 12px;
+    border-radius: 999px;
+    cursor: pointer;
+  }
+
+  .view-tabs button.active {
+    background: var(--accent);
+    color: #2a1e0c;
+  }
+
+  .mode-tabs {
+    display: flex;
+    gap: 18px;
+    justify-content: center;
+    margin: 4px 0 26px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+
+  .mode-tabs button {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-family: 'Work Sans', sans-serif;
+    font-size: 0.82rem;
+    font-weight: 500;
+    padding: 8px 2px 10px;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+  }
+
+  .mode-tabs button.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+    font-weight: 600;
+  }
+
+  .stage {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .deck {
+    position: relative;
+    width: 260px;
+    height: 320px;
+    z-index: 2;
+  }
+
+  .deck-shadow {
+    position: absolute;
+    inset: 0;
+    border-radius: var(--radius);
+    background: var(--card-front);
+    opacity: 0.35;
+  }
+
+  .deck-shadow.s1 { transform: rotate(-6deg) translateY(6px); }
+  .deck-shadow.s2 { transform: rotate(5deg) translateY(4px); opacity: 0.22; }
+
+  .flashcard {
+    position: absolute;
+    inset: 0;
+    perspective: 1200px;
+    cursor: pointer;
+  }
+
+  .flashcard-inner {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    transition: transform 0.5s cubic-bezier(0.4, 0.2, 0.2, 1);
+    transform-style: preserve-3d;
+  }
+
+  .flashcard.flipped .flashcard-inner {
+    transform: rotateY(180deg);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .flashcard-inner { transition: none; }
+  }
+
+  .face {
+    position: absolute;
+    inset: 0;
+    border-radius: var(--radius);
+    backface-visibility: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 28px;
+    text-align: center;
+    box-shadow: var(--shadow);
+  }
+
+  .face .word {
+    font-family: 'Space Mono', monospace;
+    font-size: 1.5rem;
+    font-weight: 700;
+    line-height: 1.35;
+    word-break: break-word;
+  }
+
+  .face .tag {
+    position: absolute;
+    top: 14px;
+    left: 16px;
+    font-family: 'Work Sans', sans-serif;
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    padding: 3px 8px;
+    border-radius: 999px;
+  }
+
+  .face .holes {
+    position: absolute;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 5px;
+  }
+
+  .face .holes span {
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: currentColor;
+    opacity: 0.25;
+  }
+
+  .face.front {
+    background: var(--card-front);
+    color: var(--card-front-text);
+  }
+  .face.front .tag { background: var(--accent-soft); color: #8a611f; }
+
+  .face.back {
+    background: var(--card-front);
+    color: var(--card-front-text);
+    transform: rotateY(180deg);
+  }
+  .face.back .tag { background: var(--accent-soft); color: #8a611f; }
+
+  .hint {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    margin-bottom: 18px;
+  }
+
+  .controls {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+  }
+
+  .controls button {
+    background: var(--bg-elevated);
+    border: none;
+    color: var(--text-light);
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    font-size: 1.1rem;
+    cursor: pointer;
+  }
+
+  .controls button:hover { background: #2d3549; }
+
+  .controls button.active {
+    background: var(--accent);
+    color: #2a1e0c;
+  }
+
+  .answer-stage {
+    position: relative;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 360px;
+    margin-bottom: 22px;
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+
+  .answer-zone {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 50%;
+    border: none;
+    cursor: default;
+    display: flex;
+    align-items: center;
+    z-index: 1;
+    background: transparent;
+  }
+
+  .answer-zone.wrong {
+    left: 0;
+    justify-content: flex-start;
+    padding-left: 18px;
+  }
+  .answer-zone.correct {
+    right: 0;
+    justify-content: flex-end;
+    padding-right: 18px;
+  }
+
+  .answer-zone.live { cursor: pointer; }
+  .answer-zone.wrong.live { background: var(--danger); }
+  .answer-zone.correct.live { background: #6fae66; }
+
+  .answer-icon { display: none; }
+  .answer-streak {
+    font-family: 'Space Mono', monospace;
+    font-weight: 700;
+    font-size: 2.4rem;
+    color: var(--text-light);
+    background: rgba(255,255,255,0.08);
+    border-radius: 999px;
+    min-width: 56px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .answer-zone.live .answer-streak {
+    color: #ffffff;
+    background: rgba(0,0,0,0.2);
+  }
+
+  .counter {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    min-width: 64px;
+    text-align: center;
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 40px 12px;
+    color: var(--text-muted);
+  }
+
+  .empty-state button {
+    margin-top: 14px;
+    background: var(--accent);
+    color: #2a1e0c;
+    border: none;
+    font-weight: 700;
+    padding: 10px 18px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-family: 'Work Sans', sans-serif;
+  }
+
+  /* Manage view */
+  form.card-form {
+    background: var(--bg-elevated);
+    border-radius: var(--radius);
+    padding: 16px;
+    margin-bottom: 22px;
+  }
+
+  .card-form label {
+    display: block;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    margin: 10px 0 4px;
+    font-weight: 600;
+  }
+
+  .card-form label:first-of-type { margin-top: 0; }
+
+  .card-form input,
+  .card-form textarea {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: var(--text-light);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-family: 'Work Sans', sans-serif;
+    font-size: 0.9rem;
+  }
+
+  .card-form textarea {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.72rem;
+    line-height: 1.4;
+    resize: vertical;
+  }
+
+  .card-form input:focus,
+  .card-form textarea:focus {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+
+  .transfer-intro {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    line-height: 1.45;
+    margin: 0 0 14px;
+  }
+
+  .transfer-feedback {
+    margin-top: 10px;
+    font-size: 0.78rem;
+    color: var(--accent);
+  }
+
+  .transfer-feedback.error { color: var(--danger); }
+
+  .form-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 14px;
+  }
+
+  .form-actions button {
+    font-family: 'Work Sans', sans-serif;
+    font-weight: 600;
+    font-size: 0.85rem;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 16px;
+    cursor: pointer;
+  }
+
+  .btn-primary { background: var(--accent); color: #2a1e0c; flex: 1; }
+  .btn-secondary { background: transparent; color: var(--text-muted); border: 1px solid rgba(255,255,255,0.12) !important; }
+
+  .card-list { list-style: none; margin: 0; padding: 0; }
+
+  .card-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 12px 4px;
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+  }
+
+  .card-row .pair {
+    font-size: 0.88rem;
+    line-height: 1.4;
+  }
+
+  .card-row .pair .en { font-family: 'Space Mono', monospace; font-weight: 700; }
+  .card-row .pair .fr { color: var(--text-muted); }
+
+  .row-actions { display: flex; gap: 6px; flex-shrink: 0; }
+
+  .row-actions button {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 0.95rem;
+    cursor: pointer;
+    padding: 6px;
+  }
+
+  .row-actions button.delete:hover { color: var(--danger); }
+  .row-actions button.edit:hover { color: var(--accent); }
+
+  .manage-empty {
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    padding: 24px 0;
+  }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+(function () {
+  // Si l'app tourne hors de Claude (ex: GitHub Pages), il n'y a pas de
+  // window.storage fourni par Claude : on simule la même interface avec
+  // localStorage, pour que le reste du code n'ait rien à changer.
+  if (!window.storage) {
+    window.storage = {
+      get: async (key) => {
+        const v = localStorage.getItem(key);
+        if (v === null) throw new Error('not found');
+        return { key, value: v, shared: false };
+      },
+      set: async (key, value) => {
+        localStorage.setItem(key, value);
+        return { key, value, shared: false };
+      },
+    };
+  }
+
+  const CARDS_KEY = 'vocab-cards';
+  const MODE_KEY = 'vocab-mode';
+
+  const state = {
+    cards: [],
+    index: 0,
+    flipped: false,
+    mode: 'en-fr',
+    view: 'review',
+    randomDirs: {},
+    editingId: null,
+    loaded: false,
+    transferMsg: null,
+    randomOrder: false,
+    shuffledOrder: [],
+    correctStreak: 0,
+    wrongStreak: 0,
+  };
+
+  const app = document.getElementById('app');
+
+  function uid() {
+    return 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  }
+
+  async function loadState() {
+    try {
+      const res = await window.storage.get(CARDS_KEY, false);
+      state.cards = res ? JSON.parse(res.value) : [];
+    } catch (e) {
+      state.cards = [
+        { id: uid(), en: 'nevertheless', fr: 'néanmoins' },
+        { id: uid(), en: 'to overwhelm', fr: 'submerger, accabler' },
+      ];
+      await saveCards();
+    }
+    try {
+      const res = await window.storage.get(MODE_KEY, false);
+      state.mode = res ? res.value : 'en-fr';
+    } catch (e) {
+      state.mode = 'en-fr';
+    }
+    state.loaded = true;
+    render();
+  }
+
+  async function saveCards() {
+    try {
+      await window.storage.set(CARDS_KEY, JSON.stringify(state.cards), false);
+    } catch (e) { /* stockage indisponible, on continue en mémoire */ }
+  }
+
+  async function saveMode() {
+    try {
+      await window.storage.set(MODE_KEY, state.mode, false);
+    } catch (e) { /* ignore */ }
+  }
+
+  function orderedCards() {
+    if (state.randomOrder) {
+      if (state.shuffledOrder.length !== state.cards.length) {
+        ensureShuffled();
+      }
+      return state.shuffledOrder.map(id => state.cards.find(c => c.id === id)).filter(Boolean);
+    }
+    return [...state.cards].reverse();
+  }
+
+  function ensureShuffled() {
+    const ids = state.cards.map(c => c.id);
+    for (let i = ids.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [ids[i], ids[j]] = [ids[j], ids[i]];
+    }
+    state.shuffledOrder = ids;
+  }
+
+  function currentCard() {
+    const list = orderedCards();
+    if (!list.length) return null;
+    if (state.index >= list.length) state.index = 0;
+    return list[state.index];
+  }
+
+  function getDisplay(card) {
+    let dir = state.mode;
+    if (dir === 'random') {
+      if (!state.randomDirs[card.id]) {
+        state.randomDirs[card.id] = Math.random() < 0.5 ? 'en-fr' : 'fr-en';
+      }
+      dir = state.randomDirs[card.id];
+    }
+    if (dir === 'fr-en') {
+      return { frontText: card.fr, frontLabel: 'FR', backText: card.en, backLabel: 'EN' };
+    }
+    return { frontText: card.en, frontLabel: 'EN', backText: card.fr, backLabel: 'FR' };
+  }
+
+  function escapeHtml(s) {
+    return s.replace(/[&<>"']/g, (c) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[c]));
+  }
+
+  function renderTopbar() {
+    return `
+      <div class="topbar">
+        <h1>Carnet de vocabulaire</h1>
+        <div class="view-tabs">
+          <button data-action="view" data-view="review" class="${state.view === 'review' ? 'active' : ''}">Réviser</button>
+          <button data-action="view" data-view="manage" class="${state.view === 'manage' ? 'active' : ''}">Gérer (${state.cards.length})</button>
+          <button data-action="view" data-view="transfer" class="${state.view === 'transfer' ? 'active' : ''}">Transférer</button>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderReview() {
+    if (!state.cards.length) {
+      return `
+        <div class="empty-state">
+          Ta pile est vide.<br>Ajoute ton premier mot pour commencer.
+          <div><button data-action="goto-add">Ajouter un mot</button></div>
+        </div>
+      `;
+    }
+    const card = currentCard();
+    const d = getDisplay(card);
+    const total = orderedCards().length;
+    return `
+      <div class="mode-tabs">
+        <button data-action="mode" data-mode="en-fr" class="${state.mode === 'en-fr' ? 'active' : ''}">Anglais → Français</button>
+        <button data-action="mode" data-mode="fr-en" class="${state.mode === 'fr-en' ? 'active' : ''}">Français → Anglais</button>
+        <button data-action="mode" data-mode="random" class="${state.mode === 'random' ? 'active' : ''}">Aléatoire</button>
+      </div>
+      <div class="stage">
+        <div class="answer-stage">
+          <button class="answer-zone wrong ${state.flipped ? 'live' : ''}" data-action="mark-wrong">
+            ${state.wrongStreak > 0 ? `<span class="answer-streak">${state.wrongStreak}</span>` : ''}
+          </button>
+          <button class="answer-zone correct ${state.flipped ? 'live' : ''}" data-action="mark-correct">
+            ${state.correctStreak > 0 ? `<span class="answer-streak">${state.correctStreak}</span>` : ''}
+          </button>
+          <div class="deck">
+            <div class="deck-shadow s1"></div>
+            <div class="deck-shadow s2"></div>
+            <div class="flashcard ${state.flipped ? 'flipped' : ''}" data-action="flip">
+              <div class="flashcard-inner">
+                <div class="face front">
+                  <div class="holes"><span></span><span></span><span></span></div>
+                  <span class="tag">${d.frontLabel}</span>
+                  <div class="word">${escapeHtml(d.frontText)}</div>
+                </div>
+                <div class="face back">
+                  <div class="holes"><span></span><span></span><span></span></div>
+                  <span class="tag">${d.backLabel}</span>
+                  <div class="word">${escapeHtml(d.backText)}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        ${!state.flipped ? `<div class="hint">Touche la carte pour voir la traduction</div>` : ''}
+        <div class="controls">
+          <button data-action="prev" aria-label="Carte précédente">◀</button>
+          <div class="counter">${state.index + 1} / ${total}</div>
+          <button data-action="toggle-random" aria-label="Ordre aléatoire" class="${state.randomOrder ? 'active' : ''}">🔀</button>
+          <div class="counter"></div>
+          <button data-action="next" aria-label="Carte suivante">▶</button>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderManage() {
+    const editing = state.editingId ? state.cards.find(c => c.id === state.editingId) : null;
+    const rows = [...state.cards].reverse().map(c => `
+      <li class="card-row">
+        <div class="pair">
+          <div class="en">${escapeHtml(c.en)}</div>
+          <div class="fr">${escapeHtml(c.fr)}</div>
+        </div>
+        <div class="row-actions">
+          <button class="edit" data-action="edit" data-id="${c.id}" aria-label="Modifier">✎</button>
+          <button class="delete" data-action="delete" data-id="${c.id}" aria-label="Supprimer">🗑</button>
+        </div>
+      </li>
+    `).join('');
+
+    return `
+      <form class="card-form" data-action="submit-form">
+        <label for="input-en">Mot ou phrase en anglais</label>
+        <input id="input-en" name="en" type="text" autocomplete="off" value="${editing ? escapeHtml(editing.en) : ''}" placeholder="ex : nevertheless">
+        <label for="input-fr">Traduction en français</label>
+        <input id="input-fr" name="fr" type="text" autocomplete="off" value="${editing ? escapeHtml(editing.fr) : ''}" placeholder="ex : néanmoins">
+        <div class="form-actions">
+          <button type="submit" class="btn-primary">${editing ? 'Mettre à jour' : 'Ajouter'}</button>
+          ${editing ? '<button type="button" class="btn-secondary" data-action="cancel-edit">Annuler</button>' : ''}
+        </div>
+      </form>
+      ${state.cards.length
+        ? `<ul class="card-list">${rows}</ul>`
+        : `<div class="manage-empty">Aucune fiche pour l'instant.</div>`}
+    `;
+  }
+
+  function renderTransfer() {
+    const exportText = JSON.stringify(state.cards.map(c => ({ en: c.en, fr: c.fr })));
+    return `
+      <div class="card-form">
+        <p class="transfer-intro">Pour retrouver les mêmes fiches sur un autre appareil : copie le texte ci-dessous, puis colle-le dans cet onglet, sur l'autre appareil.</p>
+        <label for="export-area">Copier mes fiches (${state.cards.length})</label>
+        <textarea id="export-area" rows="4" readonly>${escapeHtml(exportText)}</textarea>
+        <div class="form-actions">
+          <button type="button" class="btn-primary" data-action="copy-export">Copier</button>
+        </div>
+        <label for="import-area" style="margin-top: 22px;">Coller des fiches reçues d'un autre appareil</label>
+        <textarea id="import-area" rows="4" placeholder="Colle ici le texte copié depuis l'autre appareil"></textarea>
+        <div class="form-actions">
+          <button type="button" class="btn-primary" data-action="do-import">Importer</button>
+        </div>
+        ${state.transferMsg ? `<div class="transfer-feedback ${state.transferMsg.error ? 'error' : ''}">${escapeHtml(state.transferMsg.text)}</div>` : ''}
+      </div>
+    `;
+  }
+
+  function render() {
+    if (!state.loaded) {
+      app.innerHTML = '';
+      return;
+    }
+    app.innerHTML = renderTopbar() + (state.view === 'review' ? renderReview() : state.view === 'manage' ? renderManage() : renderTransfer());
+    if (state.view === 'manage') {
+      const inputEn = document.getElementById('input-en');
+      if (inputEn && state.focusAdd) {
+        inputEn.focus();
+        state.focusAdd = false;
+      }
+    }
+  }
+
+  app.addEventListener('click', (e) => {
+    const el = e.target.closest('[data-action]');
+    if (!el) return;
+    const action = el.dataset.action;
+
+    if (action === 'view') {
+      state.view = el.dataset.view;
+      state.editingId = null;
+      render();
+    } else if (action === 'goto-add') {
+      state.view = 'manage';
+      state.focusAdd = true;
+      render();
+    } else if (action === 'mode') {
+      state.mode = el.dataset.mode;
+      state.flipped = false;
+      state.randomDirs = {};
+      saveMode();
+      render();
+    } else if (action === 'flip') {
+      state.flipped = !state.flipped;
+      render();
+    } else if (action === 'next') {
+      if (!state.cards.length) return;
+      state.index = (state.index + 1) % state.cards.length;
+      state.flipped = false;
+      render();
+    } else if (action === 'prev') {
+      if (!state.cards.length) return;
+      state.index = (state.index - 1 + state.cards.length) % state.cards.length;
+      state.flipped = false;
+      render();
+    } else if (action === 'toggle-random') {
+      state.randomOrder = !state.randomOrder;
+      if (state.randomOrder) {
+        ensureShuffled();
+      }
+      state.index = 0;
+      state.flipped = false;
+      render();
+    } else if (action === 'mark-correct') {
+      if (!state.flipped) return;
+      state.correctStreak += 1;
+      state.wrongStreak = 0;
+      if (state.cards.length) {
+        state.index = (state.index + 1) % state.cards.length;
+      }
+      state.flipped = false;
+      render();
+    } else if (action === 'mark-wrong') {
+      if (!state.flipped) return;
+      state.wrongStreak += 1;
+      state.correctStreak = 0;
+      if (state.cards.length) {
+        state.index = (state.index + 1) % state.cards.length;
+      }
+      state.flipped = false;
+      render();
+    } else if (action === 'edit') {
+      state.editingId = el.dataset.id;
+      render();
+    } else if (action === 'cancel-edit') {
+      state.editingId = null;
+      render();
+    } else if (action === 'copy-export') {
+      const area = document.getElementById('export-area');
+      area.select();
+      area.setSelectionRange(0, area.value.length);
+      const original = el.textContent;
+      try {
+        navigator.clipboard.writeText(area.value);
+        el.textContent = 'Copié ✓';
+      } catch (err) {
+        el.textContent = 'Sélectionné, copie avec ⌘/Ctrl+C';
+      }
+      setTimeout(() => { el.textContent = original; }, 1800);
+    } else if (action === 'do-import') {
+      const area = document.getElementById('import-area');
+      let parsed;
+      try {
+        parsed = JSON.parse(area.value.trim());
+        if (!Array.isArray(parsed)) throw new Error('format');
+      } catch (err) {
+        state.transferMsg = { text: "Le texte collé n'est pas valide. Vérifie que tu as bien tout copié.", error: true };
+        render();
+        return;
+      }
+      let added = 0;
+      parsed.forEach((item) => {
+        if (!item || !item.en || !item.fr) return;
+        const en = String(item.en).trim();
+        const fr = String(item.fr).trim();
+        const exists = state.cards.some(c => c.en.toLowerCase() === en.toLowerCase() && c.fr.toLowerCase() === fr.toLowerCase());
+        if (!exists) {
+          state.cards.push({ id: uid(), en, fr });
+          added++;
+        }
+      });
+      saveCards();
+      state.transferMsg = added > 0
+        ? { text: `${added} fiche(s) ajoutée(s) ✓`, error: false }
+        : { text: 'Aucune nouvelle fiche (elles étaient déjà toutes présentes).', error: false };
+      render();
+    } else if (action === 'delete') {
+      const id = el.dataset.id;
+      const card = state.cards.find(c => c.id === id);
+      const label = card ? `${card.en} — ${card.fr}` : 'cette fiche';
+      if (window.confirm(`Supprimer "${label}" ?`)) {
+        state.cards = state.cards.filter(c => c.id !== id);
+        if (state.editingId === id) state.editingId = null;
+        if (state.index >= state.cards.length) state.index = 0;
+        saveCards();
+        render();
+      }
+    }
+  });
+
+  app.addEventListener('submit', (e) => {
+    const form = e.target.closest('[data-action="submit-form"]');
+    if (!form) return;
+    e.preventDefault();
+    const en = form.querySelector('#input-en').value.trim();
+    const fr = form.querySelector('#input-fr').value.trim();
+    if (!en || !fr) return;
+
+    if (state.editingId) {
+      const card = state.cards.find(c => c.id === state.editingId);
+      if (card) { card.en = en; card.fr = fr; }
+      state.editingId = null;
+    } else {
+      state.cards.push({ id: uid(), en, fr });
+    }
+    saveCards();
+    render();
+  });
+
+  loadState();
+})();
+</script>
+</body>
+</html>
