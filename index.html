@@ -110,6 +110,9 @@
   .cat-group { margin-bottom: 18px; }
 
   .cat-group-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     font-family: 'Work Sans', sans-serif;
     font-size: 0.72rem;
     font-weight: 700;
@@ -117,6 +120,19 @@
     text-transform: uppercase;
     color: var(--text-muted);
     margin-bottom: 6px;
+  }
+
+  .rename-cat {
+    background: none;
+    border: none;
+    color: var(--accent);
+    font-family: 'Work Sans', sans-serif;
+    font-size: 0.66rem;
+    font-weight: 600;
+    text-transform: none;
+    letter-spacing: normal;
+    cursor: pointer;
+    padding: 2px 4px;
   }
 
   .mode-tabs {
@@ -737,7 +753,10 @@
 
     const groupsHtml = groups.map(g => `
       <div class="cat-group">
-        <div class="cat-group-title">${escapeHtml(g.cat)} (${g.items.length})</div>
+        <div class="cat-group-title">
+          <span>${escapeHtml(g.cat)} (${g.items.length})</span>
+          <button type="button" class="rename-cat" data-action="rename-cat" data-cat="${escapeHtml(g.cat)}">renommer</button>
+        </div>
         <ul class="card-list">${g.items.map(rowHtml).join('')}</ul>
       </div>
     `).join('');
@@ -912,6 +931,20 @@
         ? { text: `${added} fiche(s) ajoutée(s) ✓`, error: false }
         : { text: 'Aucune nouvelle fiche (elles étaient déjà toutes présentes).', error: false };
       render();
+    } else if (action === 'rename-cat') {
+      const oldCat = el.dataset.cat;
+      const input = window.prompt(`Renommer la catégorie "${oldCat}" en :`, oldCat);
+      if (input !== null) {
+        const newCat = input.trim();
+        if (newCat && newCat !== oldCat) {
+          state.cards.forEach((c) => {
+            if (categoryOf(c) === oldCat) c.category = newCat;
+          });
+          if (state.categoryFilter === oldCat) state.categoryFilter = newCat;
+          saveCards();
+          render();
+        }
+      }
     } else if (action === 'delete') {
       const id = el.dataset.id;
       const card = state.cards.find(c => c.id === id);
