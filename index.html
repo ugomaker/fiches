@@ -82,6 +82,43 @@
     color: #2a1e0c;
   }
 
+  .category-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 14px;
+  }
+
+  .category-tabs button {
+    border: 1px solid rgba(255,255,255,0.12);
+    background: transparent;
+    color: var(--text-muted);
+    font-family: 'Work Sans', sans-serif;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 5px 11px;
+    border-radius: 999px;
+    cursor: pointer;
+  }
+
+  .category-tabs button.active {
+    background: var(--accent-soft);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .cat-group { margin-bottom: 18px; }
+
+  .cat-group-title {
+    font-family: 'Work Sans', sans-serif;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+  }
+
   .mode-tabs {
     display: flex;
     gap: 18px;
@@ -491,7 +528,10 @@
     shuffledOrder: [],
     correctStreak: 0,
     wrongStreak: 0,
+    categoryFilter: 'all',
   };
+
+  const DEFAULT_CATEGORY = 'Général';
 
   const app = document.getElementById('app');
 
@@ -532,14 +572,31 @@
     } catch (e) { /* ignore */ }
   }
 
+  function categoryOf(card) {
+    return card.category && card.category.trim() ? card.category.trim() : DEFAULT_CATEGORY;
+  }
+
+  function distinctCategories() {
+    const set = new Set(state.cards.map(categoryOf));
+    const list = [...set].filter(c => c !== DEFAULT_CATEGORY).sort((a, b) => a.localeCompare(b, 'fr'));
+    if (set.has(DEFAULT_CATEGORY)) list.unshift(DEFAULT_CATEGORY);
+    return list;
+  }
+
   function orderedCards() {
+    let list;
     if (state.randomOrder) {
       if (state.shuffledOrder.length !== state.cards.length) {
         ensureShuffled();
       }
-      return state.shuffledOrder.map(id => state.cards.find(c => c.id === id)).filter(Boolean);
+      list = state.shuffledOrder.map(id => state.cards.find(c => c.id === id)).filter(Boolean);
+    } else {
+      list = [...state.cards].reverse();
     }
-    return [...state.cards].reverse();
+    if (state.categoryFilter !== 'all') {
+      list = list.filter(c => categoryOf(c) === state.categoryFilter);
+    }
+    return list;
   }
 
   function ensureShuffled() {
@@ -601,14 +658,22 @@
       `;
     }
     const card = currentCard();
-    const d = getDisplay(card);
+    const d = card ? getDisplay(card) : null;
     const total = orderedCards().length;
+    const cats = distinctCategories();
     return `
+      ${cats.length > 1 ? `
+        <div class="category-tabs">
+          <button data-action="filter-cat" data-cat="all" class="${state.categoryFilter === 'all' ? 'active' : ''}">Toutes</button>
+          ${cats.map(c => `<button data-action="filter-cat" data-cat="${escapeHtml(c)}" class="${state.categoryFilter === c ? 'active' : ''}">${escapeHtml(c)}</button>`).join('')}
+        </div>
+      ` : ''}
       <div class="mode-tabs">
         <button data-action="mode" data-mode="en-fr" class="${state.mode === 'en-fr' ? 'active' : ''}">Anglais → Français</button>
         <button data-action="mode" data-mode="fr-en" class="${state.mode === 'fr-en' ? 'active' : ''}">Français → Anglais</button>
         <button data-action="mode" data-mode="random" class="${state.mode === 'random' ? 'active' : ''}">Aléatoire</button>
       </div>
+      ${!card ? `<div class="manage-empty">Aucun mot dans cette catégorie.</div>` : `
       <div class="stage">
         <div class="answer-stage">
           <button class="answer-zone wrong ${state.flipped ? 'live' : ''}" data-action="mark-wrong">
@@ -645,12 +710,19 @@
           <button data-action="next" aria-label="Carte suivante">▶</button>
         </div>
       </div>
+      `}
     `;
   }
 
   function renderManage() {
     const editing = state.editingId ? state.cards.find(c => c.id === state.editingId) : null;
-    const rows = [...state.cards].reverse().map(c => `
+    const allSorted = [...state.cards].reverse();
+    const groupNames = distinctCategories();
+    const groups = groupNames
+      .map(cat => ({ cat, items: allSorted.filter(c => categoryOf(c) === cat) }))
+      .filter(g => g.items.length);
+
+    const rowHtml = (c) => `
       <li class="card-row">
         <div class="pair">
           <div class="en">${escapeHtml(c.en)}</div>
@@ -661,6 +733,13 @@
           <button class="delete" data-action="delete" data-id="${c.id}" aria-label="Supprimer">🗑</button>
         </div>
       </li>
+    `;
+
+    const groupsHtml = groups.map(g => `
+      <div class="cat-group">
+        <div class="cat-group-title">${escapeHtml(g.cat)} (${g.items.length})</div>
+        <ul class="card-list">${g.items.map(rowHtml).join('')}</ul>
+      </div>
     `).join('');
 
     return `
@@ -669,19 +748,24 @@
         <input id="input-en" name="en" type="text" autocomplete="off" value="${editing ? escapeHtml(editing.en) : ''}" placeholder="ex : nevertheless">
         <label for="input-fr">Traduction en français</label>
         <input id="input-fr" name="fr" type="text" autocomplete="off" value="${editing ? escapeHtml(editing.fr) : ''}" placeholder="ex : néanmoins">
+        <label for="input-cat">Catégorie</label>
+        <input id="input-cat" name="cat" type="text" autocomplete="off" list="cat-options" value="${editing ? escapeHtml(categoryOf(editing)) : escapeHtml(state.lastCategory || DEFAULT_CATEGORY)}" placeholder="${DEFAULT_CATEGORY}">
+        <datalist id="cat-options">
+          ${distinctCategories().map(c => `<option value="${escapeHtml(c)}"></option>`).join('')}
+        </datalist>
         <div class="form-actions">
           <button type="submit" class="btn-primary">${editing ? 'Mettre à jour' : 'Ajouter'}</button>
           ${editing ? '<button type="button" class="btn-secondary" data-action="cancel-edit">Annuler</button>' : ''}
         </div>
       </form>
       ${state.cards.length
-        ? `<ul class="card-list">${rows}</ul>`
+        ? groupsHtml
         : `<div class="manage-empty">Aucune fiche pour l'instant.</div>`}
     `;
   }
 
   function renderTransfer() {
-    const exportText = JSON.stringify(state.cards.map(c => ({ en: c.en, fr: c.fr })));
+    const exportText = JSON.stringify(state.cards.map(c => ({ en: c.en, fr: c.fr, category: categoryOf(c) })));
     return `
       <div class="card-form">
         <p class="transfer-intro">Pour retrouver les mêmes fiches sur un autre appareil : copie le texte ci-dessous, puis colle-le dans cet onglet, sur l'autre appareil.</p>
@@ -738,13 +822,15 @@
       state.flipped = !state.flipped;
       render();
     } else if (action === 'next') {
-      if (!state.cards.length) return;
-      state.index = (state.index + 1) % state.cards.length;
+      const len = orderedCards().length;
+      if (!len) return;
+      state.index = (state.index + 1) % len;
       state.flipped = false;
       render();
     } else if (action === 'prev') {
-      if (!state.cards.length) return;
-      state.index = (state.index - 1 + state.cards.length) % state.cards.length;
+      const len = orderedCards().length;
+      if (!len) return;
+      state.index = (state.index - 1 + len) % len;
       state.flipped = false;
       render();
     } else if (action === 'toggle-random') {
@@ -755,12 +841,18 @@
       state.index = 0;
       state.flipped = false;
       render();
+    } else if (action === 'filter-cat') {
+      state.categoryFilter = el.dataset.cat;
+      state.index = 0;
+      state.flipped = false;
+      render();
     } else if (action === 'mark-correct') {
       if (!state.flipped) return;
       state.correctStreak += 1;
       state.wrongStreak = 0;
-      if (state.cards.length) {
-        state.index = (state.index + 1) % state.cards.length;
+      const len = orderedCards().length;
+      if (len) {
+        state.index = (state.index + 1) % len;
       }
       state.flipped = false;
       render();
@@ -768,8 +860,9 @@
       if (!state.flipped) return;
       state.wrongStreak += 1;
       state.correctStreak = 0;
-      if (state.cards.length) {
-        state.index = (state.index + 1) % state.cards.length;
+      const len = orderedCards().length;
+      if (len) {
+        state.index = (state.index + 1) % len;
       }
       state.flipped = false;
       render();
@@ -807,9 +900,10 @@
         if (!item || !item.en || !item.fr) return;
         const en = String(item.en).trim();
         const fr = String(item.fr).trim();
+        const category = (item.category && String(item.category).trim()) || DEFAULT_CATEGORY;
         const exists = state.cards.some(c => c.en.toLowerCase() === en.toLowerCase() && c.fr.toLowerCase() === fr.toLowerCase());
         if (!exists) {
-          state.cards.push({ id: uid(), en, fr });
+          state.cards.push({ id: uid(), en, fr, category });
           added++;
         }
       });
@@ -838,14 +932,17 @@
     e.preventDefault();
     const en = form.querySelector('#input-en').value.trim();
     const fr = form.querySelector('#input-fr').value.trim();
+    const catInput = form.querySelector('#input-cat');
+    const category = (catInput && catInput.value.trim()) || DEFAULT_CATEGORY;
     if (!en || !fr) return;
 
+    state.lastCategory = category;
     if (state.editingId) {
       const card = state.cards.find(c => c.id === state.editingId);
-      if (card) { card.en = en; card.fr = fr; }
+      if (card) { card.en = en; card.fr = fr; card.category = category; }
       state.editingId = null;
     } else {
-      state.cards.push({ id: uid(), en, fr });
+      state.cards.push({ id: uid(), en, fr, category });
     }
     saveCards();
     render();
