@@ -424,6 +424,14 @@
     resize: vertical;
   }
 
+  .card-form input[type="file"] {
+    background: none;
+    border: none;
+    padding: 6px 0;
+    color: var(--text-muted);
+    font-size: 0.78rem;
+  }
+
   .card-form input:focus,
   .card-form textarea:focus {
     outline: 2px solid var(--accent);
@@ -798,9 +806,40 @@
         <div class="form-actions">
           <button type="button" class="btn-primary" data-action="do-import">Importer</button>
         </div>
+        <label for="import-file" style="margin-top: 22px;">Ou importer un fichier .json reçu</label>
+        <input id="import-file" type="file" accept=".json,application/json,text/plain">
         ${state.transferMsg ? `<div class="transfer-feedback ${state.transferMsg.error ? 'error' : ''}">${escapeHtml(state.transferMsg.text)}</div>` : ''}
       </div>
     `;
+  }
+
+  function importFromText(raw) {
+    let parsed;
+    try {
+      parsed = JSON.parse(raw.trim());
+      if (!Array.isArray(parsed)) throw new Error('format');
+    } catch (err) {
+      state.transferMsg = { text: "Le texte n'est pas un JSON valide. Vérifie que tu as bien tout copié (ou essaie l'import par fichier).", error: true };
+      render();
+      return;
+    }
+    let added = 0;
+    parsed.forEach((item) => {
+      if (!item || !item.en || !item.fr) return;
+      const en = String(item.en).trim();
+      const fr = String(item.fr).trim();
+      const category = (item.category && String(item.category).trim()) || DEFAULT_CATEGORY;
+      const exists = state.cards.some(c => c.en.toLowerCase() === en.toLowerCase() && c.fr.toLowerCase() === fr.toLowerCase());
+      if (!exists) {
+        state.cards.push({ id: uid(), en, fr, category });
+        added++;
+      }
+    });
+    saveCards();
+    state.transferMsg = added > 0
+      ? { text: `${added} fiche(s) ajoutée(s) ✓`, error: false }
+      : { text: 'Aucune nouvelle fiche (elles étaient déjà toutes présentes).', error: false };
+    render();
   }
 
   function render() {
@@ -905,32 +944,7 @@
       setTimeout(() => { el.textContent = original; }, 1800);
     } else if (action === 'do-import') {
       const area = document.getElementById('import-area');
-      let parsed;
-      try {
-        parsed = JSON.parse(area.value.trim());
-        if (!Array.isArray(parsed)) throw new Error('format');
-      } catch (err) {
-        state.transferMsg = { text: "Le texte collé n'est pas valide. Vérifie que tu as bien tout copié.", error: true };
-        render();
-        return;
-      }
-      let added = 0;
-      parsed.forEach((item) => {
-        if (!item || !item.en || !item.fr) return;
-        const en = String(item.en).trim();
-        const fr = String(item.fr).trim();
-        const category = (item.category && String(item.category).trim()) || DEFAULT_CATEGORY;
-        const exists = state.cards.some(c => c.en.toLowerCase() === en.toLowerCase() && c.fr.toLowerCase() === fr.toLowerCase());
-        if (!exists) {
-          state.cards.push({ id: uid(), en, fr, category });
-          added++;
-        }
-      });
-      saveCards();
-      state.transferMsg = added > 0
-        ? { text: `${added} fiche(s) ajoutée(s) ✓`, error: false }
-        : { text: 'Aucune nouvelle fiche (elles étaient déjà toutes présentes).', error: false };
-      render();
+      importFromText(area.value);
     } else if (action === 'rename-cat') {
       const oldCat = el.dataset.cat;
       const input = window.prompt(`Renommer la catégorie "${oldCat}" en :`, oldCat);
@@ -957,6 +971,22 @@
         render();
       }
     }
+  });
+
+  app.addEventListener('change', (e) => {
+    if (e.target.id !== 'import-file') return;
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      importFromText(String(ev.target.result || ''));
+      e.target.value = '';
+    };
+    reader.onerror = () => {
+      state.transferMsg = { text: "Impossible de lire ce fichier.", error: true };
+      render();
+    };
+    reader.readAsText(file);
   });
 
   app.addEventListener('submit', (e) => {
